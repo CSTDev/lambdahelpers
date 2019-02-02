@@ -11,14 +11,19 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	log "github.com/sirupsen/logrus"
 )
 
+type Bucket struct {
+	svc s3iface.S3API
+}
+
 // ReadFile takes a session and a bucket name,
 // looks through the bucket and reads the first file.
 // It returns the contents of the file, its key and/or potentially an error.
-func ReadFile(sess *session.Session, bucket string) (string, string, error) {
+func (*b Bucket) ReadFile(sess *session.Session, bucket string) (string, string, error) {
 	log.WithFields(log.Fields{
 		"bucket": bucket,
 	}).Debug("Reading bucket")
