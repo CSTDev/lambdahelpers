@@ -17,23 +17,23 @@ import (
 )
 
 type Bucket struct {
-	svc s3iface.S3API
+	Client s3iface.S3API
+	Name   string
 }
 
-// ReadFile takes a session and a bucket name,
-// looks through the bucket and reads the first file.
+// ReadFile looks through the bucket and reads the first file.
 // It returns the contents of the file, its key and/or potentially an error.
-func (*b Bucket) ReadFile(sess *session.Session, bucket string) (string, string, error) {
+func (b *Bucket) ReadFile() (string, string, error) {
 	log.WithFields(log.Fields{
-		"bucket": bucket,
+		"bucket": b.Name,
 	}).Debug("Reading bucket")
 
 	query := &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(b.Name),
 	}
 
-	svc := s3.New(sess)
-	resp, err := svc.ListObjectsV2(query)
+	svc := b.Client
+	resp, err := b.Client.ListObjectsV2(query)
 
 	if err != nil {
 		log.Error("Unable to query bucket")
@@ -51,7 +51,7 @@ func (*b Bucket) ReadFile(sess *session.Session, bucket string) (string, string,
 		}).Debug("Reading File...")
 
 		input := &s3.GetObjectInput{
-			Bucket: aws.String(bucket),
+			Bucket: aws.String(b.Name),
 			Key:    key.Key,
 		}
 
