@@ -8,4 +8,6 @@ p=...
 test:
 	GO111MODULE=on $(GOTEST) -v ./pkg/$(p)
 
+build:
+	GO111MODULE=on $(GOBUILD) -v ./...
 	

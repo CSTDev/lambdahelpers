@@ -13,12 +13,14 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager/s3manageriface"
 	log "github.com/sirupsen/logrus"
 )
 
 type Bucket struct {
-	Client s3iface.S3API
-	Name   string
+	Client   s3iface.S3API
+	Uploader s3manageriface.UploaderAPI
+	Name     string
 }
 
 // ReadFile looks through the bucket and reads the first file.
@@ -32,7 +34,6 @@ func (b *Bucket) ReadFile() (string, string, error) {
 		Bucket: aws.String(b.Name),
 	}
 
-	svc := b.Client
 	resp, err := b.Client.ListObjectsV2(query)
 
 	if err != nil {
@@ -55,7 +56,7 @@ func (b *Bucket) ReadFile() (string, string, error) {
 			Key:    key.Key,
 		}
 
-		result, err := svc.GetObject(input)
+		result, err := b.Client.GetObject(input)
 
 		if err != nil {
 			log.Error("Failed to get the file")
@@ -78,50 +79,51 @@ func (b *Bucket) ReadFile() (string, string, error) {
 
 // DeleteObject takes the name of a bucket and a key of of an object in the bucket.
 // It will then delete that object if it can find it.
-func DeleteObject(sess *session.Session, bucket string, key string) error {
-	svc := s3.New(sess)
-	_, err := svc.DeleteObject(&s3.DeleteObjectInput{
-		Bucket: aws.String(bucket),
+func (b *Bucket) DeleteObject(key string) error {
+	_, err := b.Client.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(b.Name),
 		Key:    aws.String(key),
 	})
 
 	if err != nil {
 		log.WithFields(log.Fields{
-			"bucket": bucket,
+			"bucket": b.Name,
 			"key":    key,
 		}).Error("Failed to delete")
 		return err
 	}
 
-	err = svc.WaitUntilObjectNotExists(&s3.HeadObjectInput{
-		Bucket: aws.String(bucket),
+	err = b.Client.WaitUntilObjectNotExists(&s3.HeadObjectInput{
+		Bucket: aws.String(b.Name),
 		Key:    aws.String(key),
 	})
 
 	if err != nil {
 		log.WithFields(log.Fields{
-			"bucket": bucket,
+			"bucket": b.Name,
 			"key":    key,
 		}).Error("Failed to delete")
 		return err
 	}
 
 	log.WithFields(log.Fields{
-		"bucket": bucket,
+		"bucket": b.Name,
 		"key":    key,
 	}).Info("Successfully deleted")
 	return nil
 }
 
-func UploadFile(sess *session.Session, bucket string, fileName string, body string) error {
-	uploader := s3manager.NewUploader(sess)
-
+// UploadFile will write a string to an object in a bucket.
+// Currently writes the object with the prefix /content/post and
+// suffix .md
+// It takes the body, and a fileName as the key
+func (b *Bucket) UploadFile(fileName string, body string) error {
 	objectPath := "/content/post/" + fileName + ".md"
 
 	fileReader := strings.NewReader(body)
 
-	_, err := uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(bucket),
+	_, err := b.Uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(b.Name),
 		Key:    aws.String(objectPath),
 		Body:   fileReader,
 	})
@@ -167,23 +169,6 @@ func GetObjectsInBucket(sess *session.Session, bucket string) error {
 	}
 
 	return nil
-}
-
-func isDirectory(path string) bool {
-	fd, err := os.Stat(path)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"error": err,
-		}).Error("Failed to figure out if path was directory")
-		os.Exit(2)
-	}
-	switch mode := fd.Mode(); {
-	case mode.IsDir():
-		return true
-	case mode.IsRegular():
-		return false
-	}
-	return false
 }
 
 // Upload takes all the files in the given path and uploads them to the specified bucket
@@ -233,6 +218,23 @@ func Upload(sess *session.Session, bucket string, path string) error {
 	}
 	return nil
 
+}
+
+func isDirectory(path string) bool {
+	fd, err := os.Stat(path)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err,
+		}).Error("Failed to figure out if path was directory")
+		os.Exit(2)
+	}
+	switch mode := fd.Mode(); {
+	case mode.IsDir():
+		return true
+	case mode.IsRegular():
+		return false
+	}
+	return false
 }
 
 func dowloadObjectsInBucket(bucketObjectsList *s3.ListObjectsV2Output, sess *session.Session, bucket string) error {
