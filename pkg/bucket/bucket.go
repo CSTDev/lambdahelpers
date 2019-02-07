@@ -13,14 +13,14 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager/s3manageriface"
+	"github.com/cstdev/lambdahelpers/pkg/s3/s3managerinterface"
 	log "github.com/sirupsen/logrus"
 )
 
 type Bucket struct {
-	Client   s3iface.S3API
-	Uploader s3manageriface.UploaderAPI
-	Name     string
+	Client  s3iface.S3API
+	Manager s3managerinterface.S3Manager
+	Name    string
 }
 
 // ReadFile looks through the bucket and reads the first file.
@@ -122,7 +122,7 @@ func (b *Bucket) UploadFile(fileName string, body string) error {
 
 	fileReader := strings.NewReader(body)
 
-	_, err := b.Uploader.Upload(&s3manager.UploadInput{
+	_, err := b.Manager.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(b.Name),
 		Key:    aws.String(objectPath),
 		Body:   fileReader,
@@ -138,6 +138,8 @@ func (b *Bucket) UploadFile(fileName string, body string) error {
 
 const tempDir = "/tmp/site/"
 
+// GetObjectsInBucket downloads all objects it finds in a bucket
+// to /tmp/site
 func GetObjectsInBucket(sess *session.Session, bucket string) error {
 	query := &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),

@@ -8,10 +8,10 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/cstdev/lambdahelpers/pkg/s3/s3managerinterface"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,19 +37,20 @@ func ok(tb testing.TB, err error) {
 
 type mockedBucketAPI struct {
 	s3iface.S3API
-	ListResp         s3.ListObjectsV2Output
-	GetResp          s3.GetObjectOutput
+	s3managerinterface.S3Manager
+	ListObjectsFunc  func(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error)
+	GetObjectFunc    func(*s3.GetObjectInput) (*s3.GetObjectOutput, error)
 	WaitFunc         func(*s3.HeadObjectInput) error
 	DeleteObjectFunc func(*s3.DeleteObjectInput) (*s3.DeleteObjectOutput, error)
 	UploadFunc       func(*s3manager.UploadInput, ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
 }
 
-func (m mockedBucketAPI) ListObjectsV2(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
-	return &m.ListResp, nil
+func (m mockedBucketAPI) ListObjectsV2(i *s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
+	return m.ListObjectsFunc(i)
 }
 
-func (m mockedBucketAPI) GetObject(*s3.GetObjectInput) (*s3.GetObjectOutput, error) {
-	return &m.GetResp, nil
+func (m mockedBucketAPI) GetObject(i *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+	return m.GetObjectFunc(i)
 }
 
 func (m mockedBucketAPI) DeleteObject(i *s3.DeleteObjectInput) (*s3.DeleteObjectOutput, error) {
@@ -64,18 +65,16 @@ func (m mockedBucketAPI) Upload(input *s3manager.UploadInput, options ...func(*s
 	return m.UploadFunc(input, options...)
 }
 
-func (m mockedBucketAPI) UploadWithContext(aws.Context, *s3manager.UploadInput, ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
-	return &s3manager.UploadOutput{}, nil
-}
-
 // Read single file tests
 func TestReadFileReturnsErrorWhenBucketIsEmpty(t *testing.T) {
 	bucketName := "testBucket"
 
 	b := Bucket{
 		Client: mockedBucketAPI{
-			ListResp: s3.ListObjectsV2Output{
-				Name: &bucketName,
+			ListObjectsFunc: func(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
+				return &s3.ListObjectsV2Output{
+					Name: &bucketName,
+				}, nil
 			},
 		},
 		Name: bucketName,
@@ -94,19 +93,23 @@ func TestReadFileReturnsTheFirstObjectKey(t *testing.T) {
 
 	b := Bucket{
 		Client: mockedBucketAPI{
-			ListResp: s3.ListObjectsV2Output{
-				Name: &bucketName,
-				Contents: []*s3.Object{
-					{
-						Key: &expectedKey,
+			ListObjectsFunc: func(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
+				return &s3.ListObjectsV2Output{
+					Name: &bucketName,
+					Contents: []*s3.Object{
+						{
+							Key: &expectedKey,
+						},
+						{
+							Key: &secondKey,
+						},
 					},
-					{
-						Key: &secondKey,
-					},
-				},
+				}, nil
 			},
-			GetResp: s3.GetObjectOutput{
-				Body: ioutil.NopCloser(bytes.NewReader([]byte("Hello"))),
+			GetObjectFunc: func(*s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+				return &s3.GetObjectOutput{
+					Body: ioutil.NopCloser(bytes.NewReader([]byte("Hello"))),
+				}, nil
 			},
 		},
 		Name: bucketName,
@@ -127,16 +130,20 @@ func TestReadFileReturnsTheBodyOfTheObject(t *testing.T) {
 
 	b := Bucket{
 		Client: mockedBucketAPI{
-			ListResp: s3.ListObjectsV2Output{
-				Name: &bucketName,
-				Contents: []*s3.Object{
-					{
-						Key: &key,
+			ListObjectsFunc: func(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
+				return &s3.ListObjectsV2Output{
+					Name: &bucketName,
+					Contents: []*s3.Object{
+						{
+							Key: &key,
+						},
 					},
-				},
+				}, nil
 			},
-			GetResp: s3.GetObjectOutput{
-				Body: ioutil.NopCloser(bytes.NewReader([]byte("Hello"))),
+			GetObjectFunc: func(*s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+				return &s3.GetObjectOutput{
+					Body: ioutil.NopCloser(bytes.NewReader([]byte("Hello"))),
+				}, nil
 			},
 		},
 		Name: bucketName,
@@ -183,7 +190,7 @@ func TestDeleteObjectCallsDeleteAndWaitsForObjectToNotExist(t *testing.T) {
 }
 
 // Upload tests
-func TestUploadCallsUploaderWithBucketAndKey(t *testing.T) {
+func TestUploadFileCallsUploaderWithBucketAndKey(t *testing.T) {
 	isUploadCalled := false
 	var bucketCalled string
 	var keyCalled string
@@ -191,7 +198,7 @@ func TestUploadCallsUploaderWithBucketAndKey(t *testing.T) {
 	expectedKey := "/content/post/TestFile.md"
 
 	b := Bucket{
-		Uploader: mockedBucketAPI{
+		Manager: mockedBucketAPI{
 			UploadFunc: func(i *s3manager.UploadInput, options ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
 				isUploadCalled = true
 				bucketCalled = *i.Bucket
