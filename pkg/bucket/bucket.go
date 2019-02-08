@@ -13,13 +13,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/cstdev/lambdahelpers/pkg/s3/s3managerinterface"
+	"github.com/cstdev/lambdahelpers/pkg/s3/manager"
 	log "github.com/sirupsen/logrus"
 )
 
 type Bucket struct {
 	Client  s3iface.S3API
-	Manager s3managerinterface.S3Manager
+	Manager manager.S3Manager
 	Name    string
 }
 
@@ -138,22 +138,29 @@ func (b *Bucket) UploadFile(fileName string, body string) error {
 
 const tempDir = "/tmp/site/"
 
-// GetObjectsInBucket downloads all objects it finds in a bucket
+// DownloadAllObjectsInBucket downloads all objects it finds in a bucket
 // to /tmp/site
-func GetObjectsInBucket(sess *session.Session, bucket string) error {
+func (b *Bucket) DownloadAllObjectsInBucket(destDir string, otherDirs ...string) error {
 	query := &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(b.Name),
 	}
 
-	os.Mkdir(tempDir, 0777)
-	os.Mkdir(tempDir+"public", 0777)
+	if string(destDir[len(destDir)-1:]) != "/" {
+		destDir += "/"
+	}
 
-	svc := s3.New(sess)
+	os.Mkdir(destDir, 0777)
+
+	if len(otherDirs) > 0 {
+		for _, dir := range otherDirs {
+			os.Mkdir(destDir+dir, 0777)
+		}
+	}
 
 	truncatedListing := true
 
 	for truncatedListing {
-		resp, err := svc.ListObjectsV2(query)
+		resp, err := b.Client.ListObjectsV2(query)
 
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -162,7 +169,7 @@ func GetObjectsInBucket(sess *session.Session, bucket string) error {
 			return err
 		}
 
-		err = dowloadObjectsInBucket(resp, sess, bucket)
+		err = dowloadObjectsInBucket(resp, *b, destDir)
 		if err != nil {
 			return err
 		}
@@ -239,8 +246,7 @@ func isDirectory(path string) bool {
 	return false
 }
 
-func dowloadObjectsInBucket(bucketObjectsList *s3.ListObjectsV2Output, sess *session.Session, bucket string) error {
-	downloader := s3manager.NewDownloader(sess)
+func dowloadObjectsInBucket(bucketObjectsList *s3.ListObjectsV2Output, b Bucket, destDir string) error {
 
 	for _, key := range bucketObjectsList.Contents {
 		log.Debug(*key.Key)
@@ -254,11 +260,11 @@ func dowloadObjectsInBucket(bucketObjectsList *s3.ListObjectsV2Output, sess *ses
 			for _, dir := range s3FileFullPathList[:len(s3FileFullPathList)-1] {
 				dirTree += "/" + dir
 			}
-			log.Debug(fmt.Sprintf("making: %s%s", tempDir, dirTree))
-			os.MkdirAll(tempDir+dirTree, 0775)
+			log.Debug(fmt.Sprintf("making: %s%s", destDir, dirTree))
+			os.MkdirAll(destDir+dirTree, 0775)
 		}
 
-		destFilePath := tempDir + destFileName
+		destFilePath := destDir + destFileName
 		if _, err := os.Stat(destFilePath); !os.IsNotExist(err) {
 			log.WithFields(log.Fields{
 				"destFilePath": destFilePath,
@@ -277,8 +283,8 @@ func dowloadObjectsInBucket(bucketObjectsList *s3.ListObjectsV2Output, sess *ses
 
 			defer destFile.Close()
 
-			_, err = downloader.Download(destFile, &s3.GetObjectInput{
-				Bucket: aws.String(bucket),
+			_, err = b.Manager.Download(destFile, &s3.GetObjectInput{
+				Bucket: aws.String(b.Name),
 				Key:    key.Key,
 			})
 

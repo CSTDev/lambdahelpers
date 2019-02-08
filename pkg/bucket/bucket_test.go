@@ -2,6 +2,7 @@ package bucket
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -11,15 +12,22 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/cstdev/lambdahelpers/pkg/s3/s3managerinterface"
+	"github.com/cstdev/lambdahelpers/pkg/s3/manager"
 	log "github.com/sirupsen/logrus"
 )
+
+const destFilePath = "./testdata"
 
 func TestMain(m *testing.M) {
 	log.SetLevel(log.DebugLevel)
 	log.SetFormatter(&log.JSONFormatter{})
 	retCode := m.Run()
+	clearDirectories()
 	os.Exit(retCode)
+}
+
+func clearDirectories() {
+	os.RemoveAll(destFilePath)
 }
 
 // ok fails the test if an err is not nil.
@@ -37,12 +45,13 @@ func ok(tb testing.TB, err error) {
 
 type mockedBucketAPI struct {
 	s3iface.S3API
-	s3managerinterface.S3Manager
+	manager.S3Manager
 	ListObjectsFunc  func(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error)
 	GetObjectFunc    func(*s3.GetObjectInput) (*s3.GetObjectOutput, error)
 	WaitFunc         func(*s3.HeadObjectInput) error
 	DeleteObjectFunc func(*s3.DeleteObjectInput) (*s3.DeleteObjectOutput, error)
 	UploadFunc       func(*s3manager.UploadInput, ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
+	DownloadFunc     func(io.WriterAt, *s3.GetObjectInput, ...func(*s3manager.Downloader)) (int64, error)
 }
 
 func (m mockedBucketAPI) ListObjectsV2(i *s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
@@ -63,6 +72,10 @@ func (m mockedBucketAPI) WaitUntilObjectNotExists(i *s3.HeadObjectInput) error {
 
 func (m mockedBucketAPI) Upload(input *s3manager.UploadInput, options ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
 	return m.UploadFunc(input, options...)
+}
+
+func (m mockedBucketAPI) Download(w io.WriterAt, i *s3.GetObjectInput, options ...func(*s3manager.Downloader)) (int64, error) {
+	return m.DownloadFunc(w, i, options...)
 }
 
 // Read single file tests
@@ -225,5 +238,96 @@ func TestUploadFileCallsUploaderWithBucketAndKey(t *testing.T) {
 	if keyCalled != expectedKey {
 		t.Errorf("Expected Key: %s \n Actual Key: %s", expectedKey, keyCalled)
 		t.FailNow()
+	}
+}
+
+// Download Objects tests
+
+func downloadObjects(objectKey string, expectedPath string, t *testing.T) {
+	bucketName := "TestBucket"
+	isTruncated := false
+	bucket := Bucket{
+		Client: mockedBucketAPI{
+			ListObjectsFunc: func(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
+				return &s3.ListObjectsV2Output{
+					Name: &bucketName,
+					Contents: []*s3.Object{
+						{
+							Key: &objectKey,
+						},
+					},
+					IsTruncated: &isTruncated,
+				}, nil
+			},
+		},
+		Manager: mockedBucketAPI{
+			DownloadFunc: func(io.WriterAt, *s3.GetObjectInput, ...func(*s3manager.Downloader)) (int64, error) {
+				return 0, nil
+			},
+		},
+		Name: bucketName,
+	}
+
+	err := bucket.DownloadAllObjectsInBucket(destFilePath)
+	ok(t, err)
+
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Error("Expected destination object to be created.")
+	}
+}
+func TestDownloadObjectsMakesTheDirectoryToDownloadTo(t *testing.T) {
+
+	objectKey := "Object1"
+	expectedPath := destFilePath
+	downloadObjects(objectKey, expectedPath, t)
+
+}
+
+func TestDownloadCreatesObjectInSubDirectory(t *testing.T) {
+	objectKey := "/posts/Object1"
+	expectedPath := destFilePath + objectKey
+	downloadObjects(objectKey, expectedPath, t)
+
+}
+
+func TestDownloadWillCreateOtherDirsWhenTheyArePassed(t *testing.T) {
+	bucketName := "TestBucket"
+	objectKey := "Object1"
+	isTruncated := false
+	bucket := Bucket{
+		Client: mockedBucketAPI{
+			ListObjectsFunc: func(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
+				return &s3.ListObjectsV2Output{
+					Name: &bucketName,
+					Contents: []*s3.Object{
+						{
+							Key: &objectKey,
+						},
+					},
+					IsTruncated: &isTruncated,
+				}, nil
+			},
+		},
+		Manager: mockedBucketAPI{
+			DownloadFunc: func(io.WriterAt, *s3.GetObjectInput, ...func(*s3manager.Downloader)) (int64, error) {
+				return 0, nil
+			},
+		},
+		Name: bucketName,
+	}
+
+	err := bucket.DownloadAllObjectsInBucket(destFilePath, "public", "not-public")
+	ok(t, err)
+
+	expectedPath := destFilePath + "/public"
+
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("Expected %s to be created.", expectedPath)
+	}
+
+	expectedPath = destFilePath + "/not-public"
+
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("Expected %s to be created.", expectedPath)
 	}
 }
