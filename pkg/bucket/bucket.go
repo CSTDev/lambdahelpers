@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -181,8 +180,7 @@ func (b *Bucket) DownloadAllObjectsInBucket(destDir string, otherDirs ...string)
 }
 
 // Upload takes all the files in the given path and uploads them to the specified bucket
-func Upload(sess *session.Session, bucket string, path string) error {
-	path = tempDir + path
+func (b *Bucket) Upload(path string) error {
 	fileList := []string{}
 	filepath.Walk(path, func(path string, f os.FileInfo, err error) error {
 		if isDirectory(path) {
@@ -192,8 +190,6 @@ func Upload(sess *session.Session, bucket string, path string) error {
 			return nil
 		}
 	})
-
-	uploader := s3manager.NewUploader(sess)
 
 	for _, file := range fileList {
 		actualFile, err := os.Open(file)
@@ -209,12 +205,12 @@ func Upload(sess *session.Session, bucket string, path string) error {
 		contentType := "text/html"
 
 		if strings.HasSuffix(filePath, ".css") {
-			//TODO do this for .less .js and .json files
+			// TODO do this for .less .js and .json files
 			contentType = "text/css"
 		}
 
-		_, err = uploader.Upload(&s3manager.UploadInput{
-			Bucket:      aws.String(bucket),
+		_, err = b.Manager.Upload(&s3manager.UploadInput{
+			Bucket:      aws.String(b.Name),
 			Key:         aws.String(filePath),
 			Body:        actualFile,
 			ContentType: aws.String(contentType),

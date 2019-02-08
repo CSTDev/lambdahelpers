@@ -16,7 +16,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const destFilePath = "./testdata"
+const basePath = "testdata"
+const destFilePath = basePath + "/output"
+const srcFilePath = basePath + "/input"
 
 func TestMain(m *testing.M) {
 	log.SetLevel(log.DebugLevel)
@@ -239,6 +241,52 @@ func TestUploadFileCallsUploaderWithBucketAndKey(t *testing.T) {
 		t.Errorf("Expected Key: %s \n Actual Key: %s", expectedKey, keyCalled)
 		t.FailNow()
 	}
+}
+
+func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
+	var body string
+	var keys []string
+	srcFilePath := srcFilePath + "/testUpload"
+	expectedKeys := []string{srcFilePath + "/Object1.txt", srcFilePath + "/Object2.md"}
+	expectedBody := "# Object 2"
+	bucket := Bucket{
+		Name: "DestBucket",
+		Manager: mockedBucketAPI{
+			UploadFunc: func(i *s3manager.UploadInput, up ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+				keys = append(keys, *i.Key)
+				buf := new(bytes.Buffer)
+				buf.ReadFrom(i.Body)
+				body = buf.String()
+				return &s3manager.UploadOutput{}, nil
+			},
+		},
+	}
+
+	err := bucket.Upload(srcFilePath)
+	ok(t, err)
+
+	var found bool
+	for _, key := range keys {
+		for _, expectedKey := range expectedKeys {
+			log.WithFields(log.Fields{
+				"Expected": expectedKey,
+				"Uploaded": key,
+			}).Debug("Checking object keys match")
+			if expectedKey == key {
+				found = true
+				break
+			}
+			found = false
+		}
+		if !found {
+			t.Errorf("Expected key to be found in uploaded keys: %s ", key)
+		}
+	}
+
+	if body != expectedBody {
+		t.Errorf("Expected Body: %s \n Actual Body: %s \n\n", expectedBody, body)
+	}
+
 }
 
 // Download Objects tests
