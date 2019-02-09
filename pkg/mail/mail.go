@@ -5,16 +5,21 @@ import (
 
 	"github.com/DusanKasan/parsemail"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ses"
+	"github.com/aws/aws-sdk-go/service/ses/sesiface"
+
 	log "github.com/sirupsen/logrus"
 )
 
 const subject = "S3Reader Raw"
 const charSet = "UTF-8"
 
-func SendMail(sess *session.Session, recipient string, sender string, body string) error {
-	svc := ses.New(sess)
+type Mail struct {
+	Client sesiface.SESAPI
+}
+
+func (m *Mail) SendMail(recipient string, sender string, body string) error {
+
 	log.WithFields(log.Fields{
 		"sender":    sender,
 		"recipient": recipient,
@@ -41,7 +46,7 @@ func SendMail(sess *session.Session, recipient string, sender string, body strin
 		Source: aws.String(sender),
 	}
 
-	_, err := svc.SendEmail(input)
+	_, err := m.Client.SendEmail(input)
 
 	if err != nil {
 		log.Error("Failed to send email")
