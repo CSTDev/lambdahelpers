@@ -3,6 +3,7 @@ package mail
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
@@ -31,6 +32,12 @@ func ok(tb testing.TB, err error) {
 	}
 }
 
+func equals(tb testing.TB, expected, actual interface{}) {
+	if !reflect.DeepEqual(expected, actual) {
+		tb.Errorf("Expected: %s \n Actual: %s", expected, actual)
+	}
+}
+
 type mockedSESAPI struct {
 	sesiface.SESAPI
 	SendEmailFunc func(*ses.SendEmailInput) (*ses.SendEmailOutput, error)
@@ -41,13 +48,28 @@ func (m *mockedSESAPI) SendEmail(i *ses.SendEmailInput) (*ses.SendEmailOutput, e
 }
 
 func TestSendEmailSendsTheEmailDetailsToTheService(t *testing.T) {
+	var to string
+	var from string
+	var body string
+	expectedTo := "recipient@test.com"
+	expectedFrom := "sender@test.com"
+	expectedBody := "body"
 	m := Mail{
 		Client: &mockedSESAPI{
 			SendEmailFunc: func(i *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
+				to = *i.Destination.ToAddresses[0]
+				from = *i.Source
+				body = *i.Message.Body.Text.Data
+
 				return &ses.SendEmailOutput{}, nil
 			},
 		},
 	}
 
-	m.SendEmail()
+	err := m.SendMail(expectedTo, expectedFrom, expectedBody)
+	ok(t, err)
+
+	equals(t, expectedTo, to)
+	equals(t, expectedFrom, from)
+	equals(t, expectedBody, body)
 }
