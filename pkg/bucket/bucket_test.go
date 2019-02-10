@@ -246,8 +246,8 @@ func TestUploadFileCallsUploaderWithBucketAndKey(t *testing.T) {
 func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
 	var body string
 	var keys []string
-	srcFilePath := srcFilePath + "/testUpload"
-	expectedKeys := []string{srcFilePath + "/Object1.txt", srcFilePath + "/Object2.md"}
+	keyFilePath := srcFilePath + "/testUpload"
+	expectedKeys := []string{keyFilePath + "/Object1.txt", keyFilePath + "/Object2.md"}
 	expectedBody := "# Object 2"
 	bucket := Bucket{
 		Name: "DestBucket",
