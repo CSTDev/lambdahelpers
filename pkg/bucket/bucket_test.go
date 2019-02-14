@@ -21,7 +21,7 @@ const destFilePath = basePath + "/output"
 const srcFilePath = basePath + "/input"
 
 func TestMain(m *testing.M) {
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.ErrorLevel)
 	log.SetFormatter(&log.JSONFormatter{})
 	retCode := m.Run()
 	clearDirectories()
@@ -30,6 +30,7 @@ func TestMain(m *testing.M) {
 
 func clearDirectories() {
 	os.RemoveAll(destFilePath)
+	os.RemoveAll(srcFilePath + "/benchmarkUpload/")
 }
 
 // ok fails the test if an err is not nil.
@@ -289,9 +290,57 @@ func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
 
 }
 
+func generateFilesToUpload(number int, benchmarkDir string) {
+	clearDirectories()
+	os.Mkdir(benchmarkDir, 0777)
+	for n := 0; n < number; n++ {
+		if n%2 == 0 {
+			subDir, err := ioutil.TempDir(benchmarkDir, "subdir")
+			if err != nil {
+				panic(err)
+			}
+			file, err := ioutil.TempFile(subDir, "testfile*.md")
+			if err != nil {
+				panic(err)
+			}
+			buff := make([]byte, 1000)
+			ioutil.WriteFile(file.Name(), buff, 0666)
+		} else {
+			file, err := ioutil.TempFile(benchmarkDir, "testfile*.md")
+			if err != nil {
+				panic(err)
+			}
+			buff := make([]byte, 1000)
+			ioutil.WriteFile(file.Name(), buff, 0666)
+		}
+
+	}
+}
+func BenchmarkUploadSendsAllFilesInDirectoryToUpload(b *testing.B) {
+	var keys []string
+	srcFilePath := srcFilePath + "/benchmarkUpload"
+	generateFilesToUpload(100, srcFilePath)
+	b.ResetTimer()
+	bucket := Bucket{
+		Name: "DestBucket",
+		Manager: mockedBucketAPI{
+			UploadFunc: func(i *s3manager.UploadInput, up ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+				keys = append(keys, *i.Key)
+				return &s3manager.UploadOutput{}, nil
+			},
+		},
+	}
+
+	for n := 0; n < b.N; n++ {
+		err := bucket.Upload(srcFilePath)
+		ok(b, err)
+	}
+
+}
+
 // Download Objects tests
 
-func downloadObjects(objectKey string, expectedPath string, t *testing.T) {
+func downloadObjects(objectKey string, expectedPath string, tb testing.TB) {
 	bucketName := "TestBucket"
 	isTruncated := false
 	bucket := Bucket{
@@ -317,10 +366,10 @@ func downloadObjects(objectKey string, expectedPath string, t *testing.T) {
 	}
 
 	err := bucket.DownloadAllObjectsInBucket(destFilePath)
-	ok(t, err)
+	ok(tb, err)
 
 	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
-		t.Error("Expected destination object to be created.")
+		tb.Error("Expected destination object to be created.")
 	}
 }
 func TestDownloadObjectsMakesTheDirectoryToDownloadTo(t *testing.T) {

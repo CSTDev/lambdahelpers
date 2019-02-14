@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/cstdev/lambdahelpers/pkg/s3/manager"
+	"github.com/karrick/godirwalk"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -179,48 +180,56 @@ func (b *Bucket) DownloadAllObjectsInBucket(destDir string, otherDirs ...string)
 	return nil
 }
 
-// Upload takes all the files in the given path and uploads them to the specified bucket
-func (b *Bucket) Upload(path string) error {
-	fileList := []string{}
-	filepath.Walk(path, func(path string, f os.FileInfo, err error) error {
-		if isDirectory(path) {
-			return nil
-		} else {
-			fileList = append(fileList, path)
-			return nil
-		}
+func uploadFile(inFile string, path string, b Bucket) error {
+	actualFile, err := os.Open(inFile)
+	if err != nil {
+		log.Error("Unable to open file to write to")
+		return err
+	}
+	defer actualFile.Close()
+	file := strings.TrimPrefix(inFile, path)
+	filePath := filepath.ToSlash(file)
+	log.Debug(filePath)
+
+	contentType := "text/html"
+
+	if strings.HasSuffix(filePath, ".css") {
+		// TODO do this for .less .js and .json files
+		contentType = "text/css"
+	}
+
+	_, err = b.Manager.Upload(&s3manager.UploadInput{
+		Bucket:      aws.String(b.Name),
+		Key:         aws.String(filePath),
+		Body:        actualFile,
+		ContentType: aws.String(contentType),
 	})
 
-	for _, file := range fileList {
-		actualFile, err := os.Open(file)
-		if err != nil {
-			log.Error("Unable to open file to write to")
-			return err
-		}
-		defer actualFile.Close()
-		file := strings.TrimPrefix(file, path)
-		filePath := filepath.ToSlash(file)
-		log.Debug(filePath)
-
-		contentType := "text/html"
-
-		if strings.HasSuffix(filePath, ".css") {
-			// TODO do this for .less .js and .json files
-			contentType = "text/css"
-		}
-
-		_, err = b.Manager.Upload(&s3manager.UploadInput{
-			Bucket:      aws.String(b.Name),
-			Key:         aws.String(filePath),
-			Body:        actualFile,
-			ContentType: aws.String(contentType),
-		})
-
-		if err != nil {
-			log.Error("Unable to upload file")
-			return err
-		}
+	if err != nil {
+		log.Error("Unable to upload file")
+		return err
 	}
+	return nil
+}
+
+// Upload takes all the files in the given path and uploads them to the specified bucket
+func (b *Bucket) Upload(path string) error {
+	err := godirwalk.Walk(path, &godirwalk.Options{
+		Callback: func(osPathname string, de *godirwalk.Dirent) error {
+			if !isDirectory(osPathname) {
+				return uploadFile(osPathname, path, *b)
+			}
+			return nil
+		},
+		Unsorted: true,
+	})
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err,
+		}).Error("Failed to get file paths to upload")
+		return err
+	}
+
 	return nil
 
 }
