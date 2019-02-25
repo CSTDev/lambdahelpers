@@ -14,11 +14,11 @@ import (
 const subject = "S3Reader Raw"
 const charSet = "UTF-8"
 
-type Mail struct {
+type SESMail struct {
 	Client sesiface.SESAPI
 }
 
-func (m *Mail) SendMail(recipient string, sender string, body string) error {
+func (m *SESMail) SendMail(recipient string, sender string, body string) error {
 
 	log.WithFields(log.Fields{
 		"sender":    sender,

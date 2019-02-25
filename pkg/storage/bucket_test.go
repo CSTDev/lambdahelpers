@@ -21,7 +21,7 @@ const destFilePath = basePath + "/output"
 const srcFilePath = basePath + "/input"
 
 func TestMain(m *testing.M) {
-	log.SetLevel(log.ErrorLevel)
+	log.SetLevel(log.DebugLevel)
 	log.SetFormatter(&log.JSONFormatter{})
 	retCode := m.Run()
 	clearDirectories()
