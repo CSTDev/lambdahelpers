@@ -9,4 +9,6 @@ test:
 
 build:
 	GO111MODULE=on $(GOBUILD) -v ./...
-	
+
+benchmark:
+	GO111MODULE=on $(GOTEST) -run=XXX -bench=. -test.count=10 -test.benchmem=true ./...

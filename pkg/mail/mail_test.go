@@ -54,7 +54,7 @@ func TestSendEmailSendsTheEmailDetailsToTheService(t *testing.T) {
 	expectedTo := "recipient@test.com"
 	expectedFrom := "sender@test.com"
 	expectedBody := "body"
-	m := Mail{
+	m := SESMail{
 		Client: &mockedSESAPI{
 			SendEmailFunc: func(i *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
 				to = *i.Destination.ToAddresses[0]
