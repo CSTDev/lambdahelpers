@@ -1,7 +1,6 @@
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
 p=...
 
 
