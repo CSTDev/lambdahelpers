@@ -217,6 +217,9 @@ func (b *Bucket) Upload(path string) error {
 	err := godirwalk.Walk(path, &godirwalk.Options{
 		Callback: func(osPathname string, de *godirwalk.Dirent) error {
 			if !isDirectory(osPathname) {
+				log.WithFields(log.Fields{
+					"osPathName": osPathname,
+				}).Debug()
 				return uploadFile(osPathname, path, *b)
 			}
 			return nil

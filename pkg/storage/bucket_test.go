@@ -252,7 +252,7 @@ func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
 		"srcFilePath": srcFilePath,
 		"keyFilePath": keyFilePath,
 	}).Debug()
-	expectedKeys := []string{"testData/input/testUpload/Object1.txt", keyFilePath + "/Object2.md"}
+	expectedKeys := []string{keyFilePath + "/Object1.txt", keyFilePath + "/Object2.md"}
 	bucket := Bucket{
 		Name: "DestBucket",
 		Manager: mockedBucketAPI{
