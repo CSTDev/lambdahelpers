@@ -247,7 +247,7 @@ func TestUploadFileCallsUploaderWithBucketAndKey(t *testing.T) {
 func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
 	var keys []string
 
-	keyFilePath := srcFilePath + "/testUpload"
+	keyFilePath := "/testUpload"
 	log.WithFields(log.Fields{
 		"srcFilePath": srcFilePath,
 		"keyFilePath": keyFilePath,

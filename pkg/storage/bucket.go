@@ -187,7 +187,7 @@ func uploadFile(inFile string, path string, b Bucket) error {
 		return err
 	}
 	defer actualFile.Close()
-	file := strings.TrimPrefix(inFile, path)
+	file := strings.TrimPrefix(filepath.ToSlash(inFile), filepath.ToSlash(path))
 	filePath := filepath.ToSlash(file)
 	log.WithFields(log.Fields{
 		"file":     file,
