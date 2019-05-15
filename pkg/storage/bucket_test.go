@@ -245,11 +245,9 @@ func TestUploadFileCallsUploaderWithBucketAndKey(t *testing.T) {
 }
 
 func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
-	var body string
 	var keys []string
 	keyFilePath := srcFilePath + "/testUpload"
 	expectedKeys := []string{keyFilePath + "/Object1.txt", keyFilePath + "/Object2.md"}
-	expectedBody := "# Object 2"
 	bucket := Bucket{
 		Name: "DestBucket",
 		Manager: mockedBucketAPI{
@@ -257,7 +255,6 @@ func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
 				keys = append(keys, *i.Key)
 				buf := new(bytes.Buffer)
 				buf.ReadFrom(i.Body)
-				body = buf.String()
 				return &s3manager.UploadOutput{}, nil
 			},
 		},
@@ -283,11 +280,6 @@ func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
 			t.Errorf("Expected key to be found in uploaded keys: %s ", key)
 		}
 	}
-
-	if body != expectedBody {
-		t.Errorf("Expected Body: %s \n Actual Body: %s \n\n", expectedBody, body)
-	}
-
 }
 
 func generateFilesToUpload(number int, benchmarkDir string) {
