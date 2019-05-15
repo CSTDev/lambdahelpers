@@ -189,7 +189,11 @@ func uploadFile(inFile string, path string, b Bucket) error {
 	defer actualFile.Close()
 	file := strings.TrimPrefix(inFile, path)
 	filePath := filepath.ToSlash(file)
-	log.Debug(filePath)
+	log.WithFields(log.Fields{
+		"file":     file,
+		"filePath": filePath,
+		"inFile":   inFile,
+	}).Debug("File being uploaded")
 
 	contentType := "text/html"
 
@@ -219,6 +223,7 @@ func (b *Bucket) Upload(path string) error {
 			if !isDirectory(osPathname) {
 				log.WithFields(log.Fields{
 					"osPathName": osPathname,
+					"path":       path,
 				}).Debug()
 				return uploadFile(osPathname, path, *b)
 			}
