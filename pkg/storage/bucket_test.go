@@ -246,7 +246,10 @@ func TestUploadFileCallsUploaderWithBucketAndKey(t *testing.T) {
 
 func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
 	var keys []string
-	keyFilePath := "testdata/input/testUpload"
+	log.WithFields(log.Fields{
+		"srcFilePath": srcFilePath,
+	}).Debug()
+	keyFilePath := srcFilePath + "/testUpload"
 	expectedKeys := []string{keyFilePath + "/Object1.txt", keyFilePath + "/Object2.md"}
 	bucket := Bucket{
 		Name: "DestBucket",
@@ -254,7 +257,7 @@ func TestUploadSendsAllFilesInDirectoryToUpload(t *testing.T) {
 			UploadFunc: func(i *s3manager.UploadInput, up ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
 				log.WithFields(log.Fields{
 					"key": *i.Key,
-				}).Debug("Uploading key")
+				}).Debug("Uploading")
 				keys = append(keys, *i.Key)
 				buf := new(bytes.Buffer)
 				buf.ReadFrom(i.Body)
