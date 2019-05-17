@@ -187,9 +187,13 @@ func uploadFile(inFile string, path string, b Bucket) error {
 		return err
 	}
 	defer actualFile.Close()
-	file := strings.TrimPrefix(inFile, path)
+	file := strings.TrimPrefix(filepath.ToSlash(inFile), filepath.ToSlash(path))
 	filePath := filepath.ToSlash(file)
-	log.Debug(filePath)
+	log.WithFields(log.Fields{
+		"file":     file,
+		"filePath": filePath,
+		"inFile":   inFile,
+	}).Debug("File being uploaded")
 
 	contentType := "text/html"
 
@@ -217,6 +221,10 @@ func (b *Bucket) Upload(path string) error {
 	err := godirwalk.Walk(path, &godirwalk.Options{
 		Callback: func(osPathname string, de *godirwalk.Dirent) error {
 			if !isDirectory(osPathname) {
+				log.WithFields(log.Fields{
+					"osPathName": osPathname,
+					"path":       path,
+				}).Debug()
 				return uploadFile(osPathname, path, *b)
 			}
 			return nil
