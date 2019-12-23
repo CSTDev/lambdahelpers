@@ -1,8 +1,10 @@
 language: go
 
-go: 
-  - 1.11.x
+branches: 
+    only:
+    - master
 
-
-
-
+script:
+    - make test
+    - make build
+    - bash scripts/auto-increment-version.sh
